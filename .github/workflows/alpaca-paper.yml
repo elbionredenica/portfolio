@@ -1,13 +1,12 @@
-name: Alpaca Paper Trading
+name: Alpaca Paper Trading (Price Check)
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "30 14-20 * * 1-5" # 9:30am-3:30pm ET (UTC-5) weekdays
-    - cron: "0 21 * * 1-5"    # 4:00pm ET (UTC-5) weekdays
+    - cron: "0 * * * 1-5" # hourly weekdays
 
 jobs:
-  trade:
+  price_check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -23,11 +22,12 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run manual trade script
+      - name: Run price check
         env:
           ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
           ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
           ALPACA_PAPER: ${{ secrets.ALPACA_PAPER }}
           ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
+          DEFAULT_SYMBOL: ${{ secrets.DEFAULT_SYMBOL }}
         run: |
-          python src/trade.py --side buy --symbol AAPL --qty 1
+          python src/price_check.py
