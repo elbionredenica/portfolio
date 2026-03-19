@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 import alpaca.data as alpaca_data
 from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.enums import DataFeed
 from alpaca.data.requests import StockBarsRequest
 from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
 
@@ -96,7 +97,13 @@ def run_portfolio_cycle():
         return
 
     # 2. Re-evaluate each symbol
-    end_dt = datetime.now(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+    
+    # Snap end_dt to the most recent 30-minute boundary to protect against GitHub Action delays.
+    # If the action triggers at 10:42, we only want data up to 10:30 to avoid an incomplete bar.
+    minute_boundary = 30 if now_utc.minute >= 30 else 0
+    end_dt = now_utc.replace(minute=minute_boundary, second=0, microsecond=0)
+    
     # Give plenty of time to get ~60 30-min bars (60 bars * 30 min = 30 hours of trading time -> ~5 days)
     start_dt = end_dt - timedelta(days=10)
 
@@ -118,7 +125,8 @@ def run_portfolio_cycle():
                 symbol_or_symbols=sym,
                 timeframe=TimeFrame(1, TimeFrameUnit.Minute),
                 start=start_dt,
-                end=end_dt
+                end=end_dt,
+                feed=DataFeed.IEX
             )
             bars = data_client.get_stock_bars(req).df
             
