@@ -1,3 +1,9 @@
 alpaca-py==0.29.0
 python-dotenv==1.0.1
 pytz==2024.1
+pandas
+numpy
+scipy
+matplotlib
+tqdm
+lxml
