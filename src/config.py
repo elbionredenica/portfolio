@@ -23,8 +23,14 @@ def load_config() -> AlpacaConfig:
 
     api_key = os.getenv("ALPACA_API_KEY", "").strip()
     api_secret = os.getenv("ALPACA_API_SECRET", "").strip()
-    paper = _get_env_bool(os.getenv("ALPACA_PAPER"), default=True)
-    base_url = os.getenv("ALPACA_BASE_URL", "https://paper-api.alpaca.markets").strip()
+    paper_value = os.getenv("ALPACA_PAPER")
+    base_url_value = os.getenv("ALPACA_BASE_URL")
+    paper = _get_env_bool(paper_value if paper_value and paper_value.strip() else None, default=True)
+    base_url = (
+        base_url_value.strip()
+        if base_url_value and base_url_value.strip()
+        else "https://paper-api.alpaca.markets"
+    )
 
     missing = [name for name, value in {
         "ALPACA_API_KEY": api_key,

@@ -1,10 +1,11 @@
-name: Live Trading Strategy
+name: Three Sleeve Live Trading
 
 on:
   schedule:
-    # Runs at minute 1 and 31 past every hour on weekdays (Mon-Fri)
-    # The 1-minute delay ensures API data is populated for the previous 30m window
-    - cron: '1,31 * * * 1-5'
+    # Runs once each weekday after the US market open.
+    # The live trader uses only T-1 adjusted daily data and submits
+    # same-day delta orders against the three-sleeve targets.
+    - cron: "15 15 * * 1-5"
   workflow_dispatch: # Allows you to run it manually from the Actions tab
 
 jobs:
@@ -13,12 +14,12 @@ jobs:
     
     steps:
     - name: Checkout Repository
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: "3.11"
 
     - name: Install Dependencies
       run: |
@@ -29,5 +30,9 @@ jobs:
       env:
         ALPACA_API_KEY: ${{ secrets.ALPACA_API_KEY }}
         ALPACA_API_SECRET: ${{ secrets.ALPACA_API_SECRET }}
+        ALPACA_PAPER: ${{ secrets.ALPACA_PAPER }}
+        ALPACA_BASE_URL: ${{ secrets.ALPACA_BASE_URL }}
+        LIVE_DEPLOYMENT_FRACTION: "0.95"
+        LIVE_TRADING_SETTLE_WAIT_SECONDS: "10"
       run: |
-        python src/live_trader.py
+        python src/three_sleeve_live_trader.py

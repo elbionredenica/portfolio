@@ -1,0 +1,49 @@
+{
+  "trend": {
+    "risky_assets": [
+      "SPY",
+      "TLT",
+      "GLD"
+    ],
+    "cash_asset": "BIL",
+    "sma_window": 200,
+    "rebalance_frequency": "ME"
+  },
+  "kalman": {
+    "universe": [
+      "SPY",
+      "QQQ",
+      "IWM",
+      "XLF",
+      "XLK",
+      "XLE",
+      "XLI",
+      "XLV",
+      "TLT",
+      "GLD"
+    ],
+    "cash_asset": "BIL",
+    "trend_benchmark": "SPY",
+    "trend_window": 200,
+    "process_variance": 1e-05,
+    "measurement_variance": 0.001,
+    "entry_z": 2.0,
+    "exit_z": 0.25,
+    "residual_window": 10
+  },
+  "leader": {
+    "benchmark_symbol": "SPY",
+    "cash_asset": "BIL",
+    "rebalance_frequency": "ME",
+    "momentum_lookback_days": 231,
+    "skip_recent_days": 21,
+    "top_n": 1,
+    "trend_window": 200,
+    "require_stock_trend": true
+  },
+  "combined": {
+    "trend_weight": 0.5,
+    "kalman_weight": 0.35,
+    "leader_weight": 0.15
+  }
+}
