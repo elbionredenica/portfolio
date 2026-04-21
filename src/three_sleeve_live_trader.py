@@ -180,38 +180,45 @@ def build_order_plan(
     return plans
 
 
-def submit_order_plan(trading_client, order_plan: list[OrderPlan], dry_run: bool) -> None:
+def split_order_plan(order_plan: list[OrderPlan]) -> tuple[list[OrderPlan], list[OrderPlan], list[OrderPlan]]:
     sells = sorted(
         [plan for plan in order_plan if plan.delta_qty < 0],
         key=lambda plan: abs(plan.delta_qty) * float(plan.reference_price or 0.0),
         reverse=True,
     )
-    buys = sorted(
-        [plan for plan in order_plan if plan.delta_qty > 0],
+    covers = sorted(
+        [plan for plan in order_plan if plan.delta_qty > 0 and plan.current_qty < 0],
         key=lambda plan: abs(plan.delta_qty) * float(plan.reference_price or 0.0),
         reverse=True,
     )
+    buys = sorted(
+        [plan for plan in order_plan if plan.delta_qty > 0 and plan.current_qty >= 0],
+        key=lambda plan: abs(plan.delta_qty) * float(plan.reference_price or 0.0),
+        reverse=True,
+    )
+    return sells, covers, buys
 
-    for bucket_name, plans in (("SELL", sells), ("BUY", buys)):
-        if not plans:
+
+def submit_order_bucket(trading_client, bucket_name: str, plans: list[OrderPlan], dry_run: bool) -> None:
+    if not plans:
+        return
+    for plan in plans:
+        side = OrderSide.SELL if plan.delta_qty < 0 else OrderSide.BUY
+        qty = abs(plan.delta_qty)
+        print(
+            f"{bucket_name} {plan.symbol}: current={_format_qty(plan.current_qty)} "
+            f"target={_format_qty(plan.target_qty)} delta={_format_qty(plan.delta_qty)} "
+            f"weight={plan.target_weight:.2%}"
+        )
+        if dry_run:
             continue
-        for plan in plans:
-            side = OrderSide.SELL if plan.delta_qty < 0 else OrderSide.BUY
-            qty = abs(plan.delta_qty)
-            print(
-                f"{bucket_name} {plan.symbol}: current={_format_qty(plan.current_qty)} "
-                f"target={_format_qty(plan.target_qty)} delta={_format_qty(plan.delta_qty)} "
-                f"weight={plan.target_weight:.2%}"
-            )
-            if dry_run:
-                continue
-            order = MarketOrderRequest(
-                symbol=plan.symbol,
-                qty=qty,
-                side=side,
-                time_in_force=TimeInForce.DAY,
-            )
-            trading_client.submit_order(order_data=order)
+        order = MarketOrderRequest(
+            symbol=plan.symbol,
+            qty=qty,
+            side=side,
+            time_in_force=TimeInForce.DAY,
+        )
+        trading_client.submit_order(order_data=order)
 
 
 def run_live_cycle() -> None:
@@ -255,14 +262,19 @@ def run_live_cycle() -> None:
     if not dry_run:
         trading_client.cancel_orders()
 
-    sells = [plan for plan in order_plan if plan.delta_qty < 0]
-    buys = [plan for plan in order_plan if plan.delta_qty > 0]
+    sells, covers, buys = split_order_plan(order_plan)
 
-    submit_order_plan(trading_client, sells, dry_run=dry_run)
-    if sells and buys and not dry_run and settle_wait_seconds > 0:
-        print(f"Waiting {settle_wait_seconds}s for sells to settle before buys...")
+    submit_order_bucket(trading_client, "SELL", sells, dry_run=dry_run)
+    if sells and (covers or buys) and not dry_run and settle_wait_seconds > 0:
+        print(f"Waiting {settle_wait_seconds}s for sells to settle before covers/buys...")
         time.sleep(settle_wait_seconds)
-    submit_order_plan(trading_client, buys, dry_run=dry_run)
+
+    submit_order_bucket(trading_client, "COVER", covers, dry_run=dry_run)
+    if covers and buys and not dry_run and settle_wait_seconds > 0:
+        print(f"Waiting {settle_wait_seconds}s for covers to settle before new buys...")
+        time.sleep(settle_wait_seconds)
+
+    submit_order_bucket(trading_client, "BUY", buys, dry_run=dry_run)
 
     if dry_run:
         print("Dry run complete. No live orders were submitted.")

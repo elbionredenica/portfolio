@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from io import StringIO
 from typing import Iterable
@@ -118,17 +119,46 @@ def fetch_sp500_constituents() -> list[str]:
     return [symbol.replace(".", "-") for symbol in table["Symbol"].tolist()]
 
 
-def download_adjusted_close(tickers: Iterable[str], start: str, end: str | None = None) -> pd.DataFrame:
-    ordered = list(dict.fromkeys(tickers))
-    prices = yf.download(
+def _extract_close_frame(raw_prices: pd.DataFrame | pd.Series, ordered: list[str]) -> pd.DataFrame:
+    if isinstance(raw_prices, pd.Series):
+        return raw_prices.to_frame(ordered[0])
+    return raw_prices.reindex(columns=ordered)
+
+
+def _download_close_batch(ordered: list[str], start: str, end: str | None = None) -> pd.DataFrame:
+    raw_prices = yf.download(
         ordered,
         start=start,
         end=end,
         auto_adjust=True,
         progress=False,
+        threads=False,
     )["Close"]
-    if isinstance(prices, pd.Series):
-        prices = prices.to_frame(ordered[0])
+    return _extract_close_frame(raw_prices, ordered)
+
+
+def download_adjusted_close(tickers: Iterable[str], start: str, end: str | None = None) -> pd.DataFrame:
+    ordered = list(dict.fromkeys(tickers))
+    prices = _download_close_batch(ordered, start=start, end=end)
+
+    missing_symbols = prices.columns[prices.isna().all()].tolist()
+    for symbol in missing_symbols:
+        recovered = False
+        for attempt in range(3):
+            try:
+                fallback = _download_close_batch([symbol], start=start, end=end)
+                if not fallback.empty and fallback[symbol].notna().any():
+                    prices[symbol] = fallback[symbol]
+                    recovered = True
+                    break
+            except Exception as exc:
+                if attempt == 2:
+                    print(f"Warning: fallback download failed for {symbol}: {exc}")
+                else:
+                    time.sleep(1)
+        if not recovered:
+            print(f"Warning: no adjusted close history recovered for {symbol}.")
+
     prices = prices.sort_index().dropna(how="all")
     return prices.reindex(columns=ordered)
 
